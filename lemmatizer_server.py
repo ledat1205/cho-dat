@@ -1,126 +1,59 @@
 #!/usr/bin/env python3
 """
-Lemmatization server for Vocab Helper extension
-Uses TextBlob + manual verb/noun mappings
+Lemmatization server using NLTK WordNet
+Provides accurate lemmatization for English words
 Run: python3 lemmatizer_server.py
 """
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from textblob import TextBlob
+import nltk
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+from nltk.tag import pos_tag
+from nltk.corpus import wordnet
 
 app = Flask(__name__)
 CORS(app)
 
-# Common irregular verbs mapping
-IRREGULAR_VERBS = {
-    # Past tense
-    'went': 'go', 'went': 'go',
-    'came': 'come', 'came': 'come',
-    'ate': 'eat', 'eaten': 'eat',
-    'drank': 'drink', 'drunk': 'drink',
-    'ran': 'run',
-    'saw': 'see', 'seen': 'see',
-    'took': 'take', 'taken': 'take',
-    'made': 'make',
-    'said': 'say',
-    'did': 'do', 'done': 'do',
-    'gave': 'give', 'given': 'give',
-    'found': 'find',
-    'thought': 'think',
-    'brought': 'bring',
-    'began': 'begin', 'begun': 'begin',
-    'broke': 'break', 'broken': 'break',
-    'chose': 'choose', 'chosen': 'choose',
-    'drew': 'draw', 'drawn': 'draw',
-    'fell': 'fall', 'fallen': 'fall',
-    'flew': 'fly', 'flown': 'fly',
-    'knew': 'know', 'known': 'know',
-    'wrote': 'write', 'written': 'write',
-    'spoke': 'speak', 'spoken': 'speak',
-    'spent': 'spend',
-    'taught': 'teach',
-    'understood': 'understand',
-    'wore': 'wear', 'worn': 'wear',
-    'sold': 'sell',
-    'told': 'tell',
-    'sent': 'send',
-    'left': 'leave',
-    'heard': 'hear',
-    'held': 'hold',
-    'kept': 'keep',
-    'met': 'meet',
-    'paid': 'pay',
-    'put': 'put',
-    'read': 'read',
-    'rode': 'ride', 'ridden': 'ride',
-    'said': 'say',
-    'saw': 'see',
-    'sold': 'sell',
-    'sent': 'send',
-    'set': 'set',
-    'showed': 'show',
-    'stood': 'stand',
-    'swam': 'swim', 'swum': 'swim',
-    'taught': 'teach',
-    'threw': 'throw', 'thrown': 'throw',
-    'told': 'tell',
-    'understood': 'understand',
-    'wore': 'wear', 'worn': 'wear',
-    # -ing forms
-    'going': 'go',
-    'coming': 'come',
-    'eating': 'eat',
-    'drinking': 'drink',
-    'running': 'run',
-    'seeing': 'see',
-    'taking': 'take',
-    'making': 'make',
-    'saying': 'say',
-    'doing': 'do',
-    'giving': 'give',
-    'finding': 'find',
-    'thinking': 'think',
-    'bringing': 'bring',
-    'beginning': 'begin',
-    'breaking': 'break',
-    'choosing': 'choose',
-    'drawing': 'draw',
-    'falling': 'fall',
-    'flying': 'fly',
-    'knowing': 'know',
-    'writing': 'write',
-    'speaking': 'speak',
-    'spending': 'spend',
-    'teaching': 'teach',
-    'understanding': 'understand',
-    'wearing': 'wear',
-    'selling': 'sell',
-    'telling': 'tell',
-    'sending': 'send',
-    'leaving': 'leave',
-    'hearing': 'hear',
-    'holding': 'hold',
-    'keeping': 'keep',
-    'meeting': 'meet',
-    'paying': 'pay',
-    'putting': 'put',
-    'reading': 'read',
-    'riding': 'ride',
-    'showing': 'show',
-    'standing': 'stand',
-    'swimming': 'swim',
-    'throwing': 'throw',
-}
+# Initialize NLTK data
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    print("Downloading NLTK data...")
+    nltk.download('punkt_tab', quiet=True)
+    nltk.download('wordnet', quiet=True)
+    nltk.download('omw-1.4', quiet=True)
+    nltk.download('averaged_perceptron_tagger_eng', quiet=True)
+
+lemmatizer = WordNetLemmatizer()
+
+print("✓ NLTK WordNetLemmatizer initialized")
+
+def get_wordnet_pos(treebank_tag):
+    """Convert TreeBank POS tags to WordNet POS tags"""
+    if treebank_tag.startswith('J'):
+        return wordnet.ADJ
+    elif treebank_tag.startswith('V'):
+        return wordnet.VERB
+    elif treebank_tag.startswith('N'):
+        return wordnet.NOUN
+    elif treebank_tag.startswith('R'):
+        return wordnet.ADV
+    return wordnet.NOUN
 
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint"""
-    return jsonify({'status': 'ok', 'service': 'lemmatizer'})
+    return jsonify({
+        'status': 'ok',
+        'service': 'lemmatizer',
+        'engine': 'nltk-wordnet'
+    })
 
 @app.route('/lemmatize', methods=['POST'])
 def lemmatize():
-    """Lemmatize a word"""
+    """Lemmatize a word using NLTK WordNet"""
     try:
         data = request.get_json()
         word = data.get('word', '').strip().lower()
@@ -128,22 +61,27 @@ def lemmatize():
         if not word:
             return jsonify({'error': 'No word provided'}), 400
 
-        # Check irregular verbs first
-        if word in IRREGULAR_VERBS:
-            result = IRREGULAR_VERBS[word]
+        # Tokenize and tag
+        tokens = word_tokenize(word)
+        tagged = pos_tag(tokens)
+
+        if tagged:
+            token, pos_tag_str = tagged[0]
+            wordnet_pos = get_wordnet_pos(pos_tag_str)
+            lemma = lemmatizer.lemmatize(token, pos=wordnet_pos).lower()
         else:
-            # Use TextBlob for other words
-            blob = TextBlob(word)
-            lemmas = [w.lemmatize() for w in blob.words]
-            result = lemmas[0] if lemmas else word
+            lemma = word
+            pos_tag_str = 'UNKNOWN'
 
         return jsonify({
             'original': word,
-            'lemma': result,
+            'lemma': lemma,
+            'pos': pos_tag_str,
             'success': True
         })
 
     except Exception as e:
+        print(f"Error: {str(e)}")
         word = data.get('word', '') if 'data' in locals() else ''
         return jsonify({
             'error': str(e),
@@ -168,17 +106,22 @@ def lemmatize_batch():
             if not word:
                 continue
 
-            # Check irregular verbs first
-            if word in IRREGULAR_VERBS:
-                result = IRREGULAR_VERBS[word]
+            # Tokenize and tag
+            tokens = word_tokenize(word)
+            tagged = pos_tag(tokens)
+
+            if tagged:
+                token, pos_tag_str = tagged[0]
+                wordnet_pos = get_wordnet_pos(pos_tag_str)
+                lemma = lemmatizer.lemmatize(token, pos=wordnet_pos).lower()
             else:
-                blob = TextBlob(word)
-                lemmas = [w.lemmatize() for w in blob.words]
-                result = lemmas[0] if lemmas else word
+                lemma = word
+                pos_tag_str = 'UNKNOWN'
 
             results.append({
                 'original': word,
-                'lemma': result
+                'lemma': lemma,
+                'pos': pos_tag_str
             })
 
         return jsonify({
@@ -187,23 +130,69 @@ def lemmatize_batch():
         })
 
     except Exception as e:
+        print(f"Error: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    """Analyze word - returns POS tags and lemma"""
+    try:
+        data = request.get_json()
+        word = data.get('word', '').strip()
+
+        if not word:
+            return jsonify({'error': 'No word provided'}), 400
+
+        # Tokenize and tag
+        tokens = word_tokenize(word)
+        tagged = pos_tag(tokens)
+
+        analysis = {
+            'word': word,
+            'tokens': []
+        }
+
+        for token, pos_tag_str in tagged:
+            wordnet_pos = get_wordnet_pos(pos_tag_str)
+            lemma = lemmatizer.lemmatize(token, pos=wordnet_pos).lower()
+            analysis['tokens'].append({
+                'text': token,
+                'pos': pos_tag_str,
+                'lemma': lemma
+            })
+
+        analysis['success'] = True
+        return jsonify(analysis)
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
         return jsonify({
             'error': str(e),
             'success': False
         }), 500
 
 if __name__ == '__main__':
-    print("=" * 50)
-    print("Lemmatizer Server Running")
-    print("=" * 50)
+    print("=" * 60)
+    print("Lemmatizer Server - NLTK WordNet")
+    print("=" * 60)
     print("API Endpoints:")
     print("  GET  http://localhost:5555/health")
     print("  POST http://localhost:5555/lemmatize")
     print("  POST http://localhost:5555/lemmatize_batch")
-    print("\nExample usage:")
+    print("  POST http://localhost:5555/analyze")
+    print("")
+    print("Example usage:")
     print('  curl -X POST http://localhost:5555/lemmatize \\')
     print('    -H "Content-Type: application/json" \\')
     print('    -d \'{"word": "running"}\'')
-    print("=" * 50)
+    print("")
+    print("Expected response:")
+    print('  {"original":"running","lemma":"run","pos":"VBG","success":true}')
+    print("=" * 60)
+    print("✓ Server ready! Starting on http://localhost:5555")
+    print("=" * 60)
 
     app.run(host='localhost', port=5555, debug=False)

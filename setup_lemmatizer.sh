@@ -1,5 +1,5 @@
 #!/bin/bash
-# Setup script for lemmatization server with virtual environment
+# Setup script for lemmatization server using NLTK
 
 echo "================================"
 echo "Setting up Lemmatizer Server"
@@ -26,7 +26,7 @@ echo ""
 
 # Install required packages
 echo "Installing Python dependencies..."
-pip install flask flask-cors textblob
+pip install flask flask-cors nltk
 
 echo ""
 echo "✓ Dependencies installed!"
@@ -39,6 +39,8 @@ echo "   source venv/bin/activate"
 echo ""
 echo "2. Start the server:"
 echo "   python3 lemmatizer_server.py"
+echo ""
+echo "   The server will automatically download NLTK data on first run"
 echo ""
 echo "The server will run on:"
 echo "http://localhost:5555"
