@@ -115,40 +115,6 @@ async function loadTemplates() {
   }
 }
 
-// Fetch the deck's template and map field IDs by name
-async function fetchTemplateFields(apiKey, deckId) {
-  // Get deck to find template-id
-  const deckRes = await fetch(`${MOCHI_API}/decks/${deckId}`, {
-    headers: mochiHeaders(apiKey)
-  });
-  if (!deckRes.ok) return null;
-  const deck = await deckRes.json();
-
-  const templateId = deck['template-id'];
-  if (!templateId) return null;
-
-  // Get template fields (sequential — Mochi allows 1 concurrent request)
-  const tmplRes = await fetch(`${MOCHI_API}/templates/${templateId}`, {
-    headers: mochiHeaders(apiKey)
-  });
-  if (!tmplRes.ok) return null;
-  const template = await tmplRes.json();
-
-  // Map field IDs by lowercased field name
-  const fieldsObj = template.fields || {};
-  const fieldMap = {};
-  Object.values(fieldsObj).forEach(field => {
-    const name = (field.name || '').toLowerCase().trim();
-    if (name === 'name') fieldMap.name = field.id;
-    else if (name === 'vietnamese') fieldMap.vi = field.id;
-    else if (name === 'english dictionary') fieldMap.en = field.id;
-    else if (name === 'example') fieldMap.example = field.id;
-  });
-
-  console.log('Template fields mapped:', fieldMap);
-  return { templateId, fieldMap };
-}
-
 async function saveSettings() {
   const apiKey = document.getElementById('apiKey').value.trim();
   const deckId = document.getElementById('deckSelect').value;

@@ -3,8 +3,7 @@ const LEMMATIZER_URL = 'http://localhost:5555/lemmatize';
 const LEMMATIZER_HEALTH = 'http://localhost:5555/health';
 
 // Load vocabulary data
-let vocabData = [];
-let vocabIndex = {}; // Map word -> entry for faster lookup
+let vocabIndex = {};
 let serverReady = false;
 let vocabReady = false;
 
@@ -26,21 +25,17 @@ async function loadVocab() {
   try {
     const url = chrome.runtime.getURL('full_vocabs.json');
     const response = await fetch(url);
-    vocabData = await response.json();
+    const vocabData = await response.json();
 
     console.log('📥 Vocab data fetched:', vocabData.length, 'entries');
 
-    // Build index for faster lookup
     vocabData.forEach(entry => {
       const word = entry.vocab.toLowerCase();
-      if (!vocabIndex[word]) {
-        vocabIndex[word] = entry;
-      }
+      if (!vocabIndex[word]) vocabIndex[word] = entry;
     });
 
     console.log('✓ Vocab index built:', Object.keys(vocabIndex).length, 'unique words');
 
-    // Mark as ready
     vocabReady = true;
 
     // Check if lemmatizer server is available
@@ -82,19 +77,6 @@ async function lemmatize(word) {
   if (vocabIndex[lower]) {
     console.log(`✓ Found exact match: "${lower}"`);
     return lower;
-  }
-
-  // If it's a phrase, try to find it even with variations
-  if (lower.includes(' ')) {
-    console.log(`🔍 Phrase detected, searching in vocab index...`);
-    // Check if phrase exists (case-insensitive exact match)
-    const foundEntry = Object.keys(vocabIndex).find(key =>
-      key.toLowerCase() === lower
-    );
-    if (foundEntry) {
-      console.log(`✓ Found phrase: "${foundEntry}"`);
-      return foundEntry;
-    }
   }
 
   // Try to use Python lemmatizer server
@@ -190,7 +172,7 @@ async function fetchFromFreeDict(word) {
 }
 
 // Message handler for lookups and flashcard saves
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.type === 'openSettings') {
     chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
     return;
@@ -229,7 +211,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     return true; // Keep channel open for async response
   } else if (request.type === 'saveFlashcard') {
-    chrome.storage.local.get(['mochiApiKey', 'mochiDeckId', 'mochiTemplateId', 'mochiFieldMap'], async (cfg) => {
+    chrome.storage.local.get(['mochiApiKey', 'mochiDeckId', 'mochiTemplateId'], async (cfg) => {
       if (!cfg.mochiApiKey || !cfg.mochiDeckId || !cfg.mochiTemplateId) {
         console.warn('Mochi not configured');
         sendResponse({ success: false, error: 'Mochi not configured. Open Settings to connect your Mochi account.' });
@@ -238,21 +220,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       const word = request.word || '';
 
-      // Build card payload — use template fields if configured, else plain markdown
-      let cardData = { 'deck-id': cfg.mochiDeckId };
-
-      const templateContent = '<< Name >>\n\n---\n\nnghĩa tiếng Việt: << Vietnamese >>\n\nnghĩa tiếng Anh: << English dictionary >>\n\nví dụ: << Example >>';
-      if (cfg.mochiTemplateId) {
-        cardData['template-id'] = cfg.mochiTemplateId;
-      }
-      cardData.content = templateContent;
-      cardData.fields = {
-        name: { id: 'name', value: word }
+      const cardData = {
+        'deck-id': cfg.mochiDeckId,
+        'template-id': cfg.mochiTemplateId,
+        content: '<< Name >>\n\n---\n\nnghĩa tiếng Việt: << Vietnamese >>\n\nnghĩa tiếng Anh: << English dictionary >>\n\nví dụ: << Example >>',
+        fields: { name: { id: 'name', value: word } }
       };
-
-      console.log('🔑 deck-id:', cfg.mochiDeckId);
-      console.log('📋 template-id:', cfg.mochiTemplateId);
-      console.log('📤 Payload:', JSON.stringify(cardData, null, 2));
 
       try {
         const res = await fetch('https://app.mochi.cards/api/cards', {
