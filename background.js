@@ -148,6 +148,47 @@ async function lemmatize(word) {
   return lower;
 }
 
+// Fallback: fetch definition from Free Dictionary API
+async function fetchFromFreeDict(word) {
+  try {
+    const response = await fetch(
+      `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!Array.isArray(data) || !data[0]) return null;
+
+    const result = data[0];
+    const meanings = [];
+    for (const meaning of (result.meanings || [])) {
+      for (const def of (meaning.definitions || []).slice(0, 2)) {
+        meanings.push({
+          en: def.definition || '',
+          vi: '',
+          example: def.example || ''
+        });
+      }
+      if (meanings.length >= 3) break;
+    }
+
+    return {
+      vocab: result.word,
+      vocabType: result.meanings?.[0]?.partOfSpeech || 'unknown',
+      pronounce: {
+        uk: result.phonetic || '',
+        us: result.phonetic || '',
+        ukmp3: result.phonetics?.find(p => p.audio)?.audio || '',
+        usmp3: result.phonetics?.find(p => p.audio)?.audio || ''
+      },
+      translate: meanings,
+      source: 'freedict'
+    };
+  } catch (err) {
+    console.warn('Free Dictionary API error:', err.message);
+    return null;
+  }
+}
+
 // Message handler for lookups and flashcard saves
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'lookup') {
@@ -156,9 +197,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Wait for vocab to be ready, then process
     waitForVocab().then(async () => {
       const lemmatized = await lemmatize(word);
-      const entry = vocabIndex[lemmatized] || null;
+      let entry = vocabIndex[lemmatized] || null;
 
-      console.log(`📝 Lookup: "${word}" → "${lemmatized}" [${entry ? 'FOUND' : 'NOT FOUND'}]`);
+      if (!entry) {
+        console.log(`🌐 Not in local vocab, trying Free Dictionary API for "${lemmatized}"...`);
+        entry = await fetchFromFreeDict(lemmatized);
+        if (!entry && lemmatized !== word.toLowerCase()) {
+          entry = await fetchFromFreeDict(word.toLowerCase());
+        }
+      }
+
+      console.log(`📝 Lookup: "${word}" → "${lemmatized}" [${entry ? (entry.source === 'freedict' ? 'FOUND (web)' : 'FOUND') : 'NOT FOUND'}]`);
 
       sendResponse({
         original: word,
