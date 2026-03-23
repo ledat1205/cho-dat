@@ -78,10 +78,23 @@ function waitForVocab() {
 async function lemmatize(word) {
   const lower = word.toLowerCase().trim();
 
-  // Try original word first
+  // Try exact match first (handles both words and phrases)
   if (vocabIndex[lower]) {
-    console.log(`✓ Found original: "${lower}"`);
+    console.log(`✓ Found exact match: "${lower}"`);
     return lower;
+  }
+
+  // If it's a phrase, try to find it even with variations
+  if (lower.includes(' ')) {
+    console.log(`🔍 Phrase detected, searching in vocab index...`);
+    // Check if phrase exists (case-insensitive exact match)
+    const foundEntry = Object.keys(vocabIndex).find(key =>
+      key.toLowerCase() === lower
+    );
+    if (foundEntry) {
+      console.log(`✓ Found phrase: "${foundEntry}"`);
+      return foundEntry;
+    }
   }
 
   // Try to use Python lemmatizer server
@@ -164,21 +177,29 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     return true; // Keep channel open for async response
   } else if (request.type === 'saveFlashcard') {
-    chrome.storage.local.get(['flashcards'], (result) => {
-      const flashcards = result.flashcards || [];
-      flashcards.push({
-        word: request.word,
-        type: request.type || 'unknown',
-        context: request.context || '',
-        definition: request.definition || '',
-        timestamp: new Date().toISOString()
-      });
+    try {
+      chrome.storage.local.get(['flashcards'], (result) => {
+        const flashcards = result.flashcards || [];
+        const newCard = {
+          word: request.word || '',
+          pos: request.pos || 'unknown',
+          context: request.context || '',
+          definition: request.definition || '',
+          timestamp: new Date().toISOString()
+        };
 
-      chrome.storage.local.set({ flashcards }, () => {
-        console.log(`💾 Saved: "${request.word}" (total: ${flashcards.length})`);
-        sendResponse({ success: true, totalCards: flashcards.length });
+        flashcards.push(newCard);
+        console.log(`💾 Saving flashcard:`, newCard);
+
+        chrome.storage.local.set({ flashcards }, () => {
+          console.log(`✓ Saved: "${request.word}" (total: ${flashcards.length})`);
+          sendResponse({ success: true, totalCards: flashcards.length });
+        });
       });
-    });
+    } catch (err) {
+      console.error('Save error:', err);
+      sendResponse({ success: false, error: err.message });
+    }
     return true;
   }
 });

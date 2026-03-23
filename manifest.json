@@ -4,7 +4,8 @@
   "version": "1.0",
   "description": "Hover over words to see definitions and save them to flashcards",
   "permissions": [
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"

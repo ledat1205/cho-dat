@@ -7,8 +7,8 @@
 
 2. **Test it immediately:**
    - Go to any webpage
-   - Double-click the word **"hello"**
-   - A tooltip with definition should appear!
+   - Select (drag) or right-click the word **"hello"**
+   - Right-click it to see definition!
 
 3. **Save a word:**
    - Click "Save to Flashcard" in the tooltip
@@ -33,7 +33,7 @@
 
 ## Features at a Glance
 
-✅ **Hover for definitions** - Double-click any word
+✅ **Lookup definitions** - Right-click any word or phrase
 ✅ **Smart lemmatization** - "running" → "run" automatically
 ✅ **Audio pronunciation** - Click 🔊 to hear it
 ✅ **Save to flashcards** - Build your personal word bank
@@ -43,16 +43,16 @@
 ## Usage Tips
 
 **For optimal results:**
-- Double-click the actual word (not a phrase)
+- Drag to select text, then right-click
+- Works with single words AND phrases (e.g., "as long as")
 - Use common English words (database is from Cambridge Dictionary)
-- Try base form if a word isn't found (e.g., "run" instead of "running")
-- Make sure YouTube captions are visible before double-clicking
+- Make sure YouTube captions are visible before right-clicking
 
 ## Common Issues
 
 | Problem | Solution |
 |---------|----------|
-| Tooltip doesn't appear | Try a different word, double-click the word itself |
+| Tooltip doesn't appear | Make sure text is selected before right-clicking |
 | Word not found | Try the base form (remove -ing, -ed, -s endings) |
 | YouTube not working | Make sure captions are enabled with CC button |
 | Flashcards not saving | Check browser console (F12) for errors |
