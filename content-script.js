@@ -12,7 +12,6 @@ function extractSentenceContext(word) {
   try {
     const range = selection.getRangeAt(0);
     const startContainer = range.startContainer;
-    const endContainer = range.endContainer;
 
     // Get the text node or parent text
     let textNode = startContainer.nodeType === 3 ? startContainer : startContainer.textContent ? startContainer : null;
@@ -200,17 +199,60 @@ function removeTooltip() {
   }
 }
 
-// Handle right-click (context menu)
-document.addEventListener('contextmenu', (e) => {
-  const selection = window.getSelection().toString().trim();
+// Create a small lookup button near the selected text
+function createLookupButton(word, x, y) {
+  const btn = document.createElement('button');
+  btn.className = 'vocab-lookup-btn';
+  btn.textContent = '📖 Look up';
 
-  if (selection.length === 0) {
-    // No text selected - allow normal context menu
+  let posX = x;
+  let posY = y;
+  if (posX + 110 > window.innerWidth) posX = window.innerWidth - 120;
+  if (posY + 40 > window.innerHeight) posY = window.innerHeight - 50;
+  if (posX < 10) posX = 10;
+  if (posY < 10) posY = 10;
+
+  btn.style.left = posX + 'px';
+  btn.style.top = posY + 'px';
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    btn.remove();
+    currentTooltip = null;
+
+    try {
+      chrome.runtime.sendMessage({ type: 'lookup', word }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn('Extension context error:', chrome.runtime.lastError.message);
+          return;
+        }
+        const tooltip = createTooltip(response, posX, posY);
+        document.body.appendChild(tooltip);
+        currentTooltip = tooltip;
+        setTimeout(() => {
+          document.addEventListener('click', removeTooltip, { once: true });
+        }, 0);
+      });
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  });
+
+  return btn;
+}
+
+// Handle text selection via mouse
+document.addEventListener('mouseup', (e) => {
+  // Don't trigger if clicking inside our own UI
+  if (e.target.closest('.vocab-lookup-btn') || e.target.closest('.vocab-tooltip')) return;
+
+  const selection = window.getSelection();
+  const word = selection.toString().trim();
+
+  if (word.length === 0) {
+    removeTooltip();
     return;
   }
-
-  // Prevent default context menu
-  e.preventDefault();
 
   if (!chrome || !chrome.runtime) {
     console.error('Extension API not available');
@@ -219,28 +261,21 @@ document.addEventListener('contextmenu', (e) => {
 
   removeTooltip();
 
-  // Position near the right-click location
-  let x = e.pageX;
-  let y = e.pageY + 10;
+  // Position button right below the selected text using its bounding rect
+  // rect coords are relative to viewport, matching position: fixed
+  const range = selection.getRangeAt(0);
+  const rect = range.getBoundingClientRect();
+  const x = rect.left + rect.width / 2 - 50; // center under selection
+  const y = rect.bottom + 6;
 
-  console.log('Right-click detected, looking up:', selection);
+  const btn = createLookupButton(word, x, y);
+  document.body.appendChild(btn);
+  currentTooltip = btn;
 
-  // Send to background for lookup
-  try {
-    chrome.runtime.sendMessage({ type: 'lookup', word: selection }, (response) => {
-      console.log('Lookup response:', response);
-      const tooltip = createTooltip(response, x, y);
-      document.body.appendChild(tooltip);
-      currentTooltip = tooltip;
-
-      // Remove tooltip on click outside
-      setTimeout(() => {
-        document.addEventListener('click', removeTooltip, { once: true });
-      }, 0);
-    });
-  } catch (error) {
-    console.error('Error sending message:', error);
-  }
+  // Remove button on next click outside
+  setTimeout(() => {
+    document.addEventListener('click', removeTooltip, { once: true });
+  }, 0);
 });
 
 // YouTube subtitle support
@@ -254,23 +289,20 @@ function watchYouTubeSubtitles() {
   youtubeListenerAdded = true;
   console.log('YouTube subtitle listener added');
 
-  subtitleContainer.addEventListener('contextmenu', (e) => {
+  subtitleContainer.addEventListener('mouseup', (e) => {
+    if (e.target.closest('.vocab-lookup-btn') || e.target.closest('.vocab-tooltip')) return;
+
     const word = window.getSelection().toString().trim();
     if (word.length === 0) return;
 
-    e.preventDefault();
-
     removeTooltip();
-    chrome.runtime.sendMessage({ type: 'lookup', word: word }, (response) => {
-      console.log('YouTube lookup response:', response);
-      const tooltip = createTooltip(response, e.pageX, e.pageY + 10);
-      document.body.appendChild(tooltip);
-      currentTooltip = tooltip;
+    const btn = createLookupButton(word, e.pageX, e.pageY + 12);
+    document.body.appendChild(btn);
+    currentTooltip = btn;
 
-      setTimeout(() => {
-        document.addEventListener('click', removeTooltip, { once: true });
-      }, 0);
-    });
+    setTimeout(() => {
+      document.addEventListener('click', removeTooltip, { once: true });
+    }, 0);
   });
 }
 
@@ -280,4 +312,4 @@ if (window.location.hostname.includes('youtube.com')) {
   setInterval(watchYouTubeSubtitles, 1500);
 }
 
-console.log('Vocab Helper loaded - Right-click to look up words!');
+console.log('Vocab Helper loaded - Select text to look up words!');

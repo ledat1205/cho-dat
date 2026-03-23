@@ -99,3 +99,27 @@
   color: #999;
   font-style: italic;
 }
+
+/* Small lookup button shown on text selection */
+.vocab-lookup-btn {
+  position: fixed;
+  z-index: 999999;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.vocab-lookup-btn:hover {
+  background: #45a049;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
+}
