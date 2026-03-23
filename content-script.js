@@ -138,8 +138,14 @@ function createTooltip(data, x, y) {
       ${entry.pronounce && entry.pronounce.usmp3 ? `<button class="vocab-audio" data-audio="${entry.pronounce.usmp3}">🔊</button>` : ''}
     </div>
     <div class="vocab-translations">${translationsHtml}</div>
-    <button class="vocab-save" data-word="${entry.vocab}" data-type="${entry.vocabType}" data-definition="${definition}">Save to Flashcard</button>
+    <button class="vocab-save" data-word="${entry.vocab}" data-type="${entry.vocabType}">Save to Flashcard</button>
   `;
+
+  // Store fields directly on element to avoid HTML attribute escaping issues
+  const saveEl = tooltip.querySelector('.vocab-save');
+  saveEl._definition = definition;
+  saveEl._vi = entry.translate && entry.translate[0] ? entry.translate[0].vi : '';
+  saveEl._example = entry.translate && entry.translate[0] ? entry.translate[0].example : '';
 
   // Audio button listener
   const audioBtn = tooltip.querySelector('.vocab-audio');
@@ -167,7 +173,9 @@ function createTooltip(data, x, y) {
       type: 'saveFlashcard',
       word: saveBtn.dataset.word,
       pos: saveBtn.dataset.type,
-      definition: saveBtn.dataset.definition,
+      definition: saveBtn._definition || '',
+      vi: saveBtn._vi || '',
+      example: saveBtn._example || '',
       context: sentence
     }, (response) => {
       console.log('Save response:', response);
@@ -234,7 +242,11 @@ function createLookupButton(word, x, y) {
         }, 0);
       });
     } catch (error) {
-      console.error('Error sending message:', error);
+      if (error.message && error.message.includes('Extension context invalidated')) {
+        console.warn('Extension was reloaded — please refresh this page.');
+      } else {
+        console.error('Error sending message:', error);
+      }
     }
   });
 

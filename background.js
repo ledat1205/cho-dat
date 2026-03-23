@@ -191,7 +191,10 @@ async function fetchFromFreeDict(word) {
 
 // Message handler for lookups and flashcard saves
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'lookup') {
+  if (request.type === 'openSettings') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
+    return;
+  } else if (request.type === 'lookup') {
     const word = request.word;
 
     // Wait for vocab to be ready, then process
@@ -226,29 +229,55 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     return true; // Keep channel open for async response
   } else if (request.type === 'saveFlashcard') {
-    try {
-      chrome.storage.local.get(['flashcards'], (result) => {
-        const flashcards = result.flashcards || [];
-        const newCard = {
-          word: request.word || '',
-          pos: request.pos || 'unknown',
-          context: request.context || '',
-          definition: request.definition || '',
-          timestamp: new Date().toISOString()
-        };
+    chrome.storage.local.get(['mochiApiKey', 'mochiDeckId', 'mochiTemplateId', 'mochiFieldMap'], async (cfg) => {
+      if (!cfg.mochiApiKey || !cfg.mochiDeckId || !cfg.mochiTemplateId) {
+        console.warn('Mochi not configured');
+        sendResponse({ success: false, error: 'Mochi not configured. Open Settings to connect your Mochi account.' });
+        return;
+      }
 
-        flashcards.push(newCard);
-        console.log(`💾 Saving flashcard:`, newCard);
+      const word = request.word || '';
 
-        chrome.storage.local.set({ flashcards }, () => {
-          console.log(`✓ Saved: "${request.word}" (total: ${flashcards.length})`);
-          sendResponse({ success: true, totalCards: flashcards.length });
+      // Build card payload — use template fields if configured, else plain markdown
+      let cardData = { 'deck-id': cfg.mochiDeckId };
+
+      const templateContent = '<< Name >>\n\n---\n\nnghĩa tiếng Việt: << Vietnamese >>\n\nnghĩa tiếng Anh: << English dictionary >>\n\nví dụ: << Example >>';
+      if (cfg.mochiTemplateId) {
+        cardData['template-id'] = cfg.mochiTemplateId;
+      }
+      cardData.content = templateContent;
+      cardData.fields = {
+        name: { id: 'name', value: word }
+      };
+
+      console.log('🔑 deck-id:', cfg.mochiDeckId);
+      console.log('📋 template-id:', cfg.mochiTemplateId);
+      console.log('📤 Payload:', JSON.stringify(cardData, null, 2));
+
+      try {
+        const res = await fetch('https://app.mochi.cards/api/cards', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Basic ' + btoa(cfg.mochiApiKey + ':')
+          },
+          body: JSON.stringify(cardData)
         });
-      });
-    } catch (err) {
-      console.error('Save error:', err);
-      sendResponse({ success: false, error: err.message });
-    }
+
+        if (res.ok) {
+          const card = await res.json();
+          console.log(`✓ Saved to Mochi: "${word}" (card id: ${card.id})`);
+          sendResponse({ success: true });
+        } else {
+          const text = await res.text();
+          console.error(`Mochi save error ${res.status}:`, text);
+          sendResponse({ success: false, error: `Mochi error ${res.status}` });
+        }
+      } catch (err) {
+        console.error('Mochi fetch error:', err);
+        sendResponse({ success: false, error: err.message });
+      }
+    });
     return true;
   }
 });

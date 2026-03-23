@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Vocab Helper – Mochi Settings</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 10px;
+      padding: 32px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+    h1 { font-size: 20px; color: #333; margin-bottom: 8px; }
+    .subtitle { font-size: 13px; color: #888; margin-bottom: 28px; }
+    .subtitle a { color: #2196F3; text-decoration: none; }
+    .subtitle a:hover { text-decoration: underline; }
+    .field { margin-bottom: 20px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #555; margin-bottom: 6px; }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: #2196F3; }
+    .input-row { display: flex; gap: 8px; }
+    .input-row input { flex: 1; }
+    select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+      outline: none;
+      cursor: pointer;
+    }
+    select:focus { border-color: #2196F3; }
+    select:disabled { background: #f9f9f9; color: #aaa; cursor: default; }
+    button {
+      padding: 9px 18px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary { background: #4CAF50; color: white; width: 100%; padding: 11px; font-size: 15px; }
+    .btn-primary:hover { background: #43a047; }
+    .btn-primary:disabled { background: #aaa; cursor: default; }
+    .btn-secondary { background: #2196F3; color: white; white-space: nowrap; }
+    .btn-secondary:hover { background: #1976D2; }
+    .btn-secondary:disabled { background: #aaa; cursor: default; }
+    .status {
+      margin-top: 16px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      display: none;
+    }
+    .status.success { background: #e8f5e9; color: #2e7d32; display: block; }
+    .status.error { background: #ffebee; color: #c62828; display: block; }
+    .status.info { background: #e3f2fd; color: #1565c0; display: block; }
+    .divider { border: none; border-top: 1px solid #eee; margin: 24px 0; }
+    .hint { font-size: 12px; color: #999; margin-top: 5px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔗 Mochi Integration</h1>
+    <p class="subtitle">
+      Connect Vocab Helper to your <a href="https://app.mochi.cards" target="_blank">Mochi</a> account.
+      Get your API key from <a href="https://app.mochi.cards/settings/api" target="_blank">Mochi Settings → API</a>.
+    </p>
+
+    <div class="field">
+      <label for="apiKey">Mochi API Key</label>
+      <div class="input-row">
+        <input type="password" id="apiKey" placeholder="Enter your Mochi API key" autocomplete="off">
+        <button class="btn-secondary" id="loadDecksBtn">Load Decks</button>
+      </div>
+      <p class="hint">Your API key is stored locally in your browser and never sent anywhere except Mochi.</p>
+    </div>
+
+    <div class="field">
+      <label for="deckSelect">Target Deck</label>
+      <select id="deckSelect" disabled>
+        <option value="">— enter API key and load decks —</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="templateSelect">Template</label>
+      <div class="input-row">
+        <select id="templateSelect" disabled>
+          <option value="">— load decks first —</option>
+        </select>
+        <button class="btn-secondary" id="loadTemplatesBtn" disabled>Load Templates</button>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <button class="btn-primary" id="saveBtn">Save Settings</button>
+
+    <div class="status" id="status"></div>
+  </div>
+  <script src="settings.js"></script>
+</body>
+</html>

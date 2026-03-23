@@ -1,171 +1,132 @@
-// Load and display flashcards
-function loadFlashcards() {
-  console.log('=== loadFlashcards called ===');
+const MOCHI_API = 'https://app.mochi.cards/api';
 
-  if (!chrome || !chrome.storage) {
-    console.error('❌ Chrome storage API not available');
-    document.body.innerHTML = '<h1>❌ Extension API not available</h1>';
-    return;
-  }
+function mochiHeaders(apiKey) {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': 'Basic ' + btoa(apiKey + ':')
+  };
+}
 
-  console.log('Fetching flashcards from storage...');
+// Parse our markdown card format back into fields
+// Format: "# word *(pos)*\n\n**Definition:** ...\n\n**Context:** "..."
+function parseCardContent(content) {
+  const word = (content.match(/^# (.+?) \*\((.+?)\)\*/m) || [])[1] || '';
+  const pos  = (content.match(/^# .+? \*\((.+?)\)\*/m) || [])[1] || '';
+  const definition = (content.match(/\*\*Definition:\*\* (.+)/) || [])[1] || '';
+  const context    = (content.match(/\*\*Context:\*\* "(.+)"/) || [])[1] || '';
+  return { word, pos, definition, context };
+}
 
-  chrome.storage.local.get(['flashcards'], (result) => {
-    console.log('✓ Storage callback received');
-    console.log('Result:', result);
+function setStatus(msg) {
+  document.getElementById('count').textContent = msg;
+}
 
-    const flashcards = result.flashcards || [];
-    const container = document.getElementById('cardsContainer');
-    const emptyState = document.getElementById('emptyState');
-    const count = document.getElementById('count');
+async function loadFlashcards() {
+  const container = document.getElementById('cardsContainer');
+  const emptyState = document.getElementById('emptyState');
 
-    console.log('Loaded', flashcards.length, 'flashcards');
+  container.innerHTML = '';
+  emptyState.style.display = 'none';
+  setStatus('Loading…');
 
-    if (!container) {
-      console.error('❌ cardsContainer element not found!');
-      return;
-    }
-
-    if (!count) {
-      console.error('❌ count element not found!');
-      return;
-    }
-
-    // Update count
-    count.textContent = `📊 Total: ${flashcards.length}`;
-
-    if (flashcards.length === 0) {
-      console.log('No flashcards - showing empty state');
+  chrome.storage.local.get(['mochiApiKey', 'mochiDeckId'], async (cfg) => {
+    if (!cfg.mochiApiKey || !cfg.mochiDeckId) {
+      setStatus('');
+      emptyState.innerHTML = '⚙️ Mochi not configured. <a href="#" onclick="openSettings()">Open Settings</a> to connect your account.';
       emptyState.style.display = 'block';
-      container.innerHTML = '';
       return;
     }
-
-    console.log('Rendering', flashcards.length, 'cards...');
-    emptyState.style.display = 'none';
 
     try {
-      container.innerHTML = flashcards.map((card, idx) => {
-        console.log(`Card ${idx}:`, card);
+      const res = await fetch(`${MOCHI_API}/cards?deck-id=${encodeURIComponent(cfg.mochiDeckId)}`, {
+        headers: mochiHeaders(cfg.mochiApiKey)
+      });
 
-        const safeWord = (card.word || '').replace(/'/g, "\\'").substring(0, 100);
-        const safePos = (card.pos || card.type || 'unknown').substring(0, 50);
-        const safeContext = (card.context || '').replace(/'/g, "\\'").substring(0, 200);
-        const safeDefinition = (card.definition || '').replace(/'/g, "\\'").substring(0, 200);
+      if (res.status === 401) {
+        setStatus('');
+        emptyState.textContent = '❌ Invalid Mochi API key. Check Settings.';
+        emptyState.style.display = 'block';
+        return;
+      }
+      if (!res.ok) {
+        setStatus('');
+        emptyState.textContent = `❌ Mochi error ${res.status}. Try refreshing.`;
+        emptyState.style.display = 'block';
+        return;
+      }
 
+      const data = await res.json();
+      const cards = (data.docs || []).filter(c => !c['archived?']);
+
+      setStatus(`📊 Total: ${cards.length}`);
+
+      if (cards.length === 0) {
+        emptyState.textContent = 'No flashcards yet. Double-click words to add them!';
+        emptyState.style.display = 'block';
+        return;
+      }
+
+      container.innerHTML = cards.map(card => {
+        const { word, pos, definition, context } = parseCardContent(card.content || '');
+        const safeId = card.id.replace(/'/g, "\\'");
+        const displayWord = word || card.id;
         return `
           <div class="card" onclick="toggleFlip(this)">
-            <div class="card-word">${safeWord}</div>
+            <div class="card-word">${displayWord}</div>
             <div class="card-content">
-              <strong>POS:</strong> ${safePos}<br>
-              <strong>Context:</strong> "${safeContext}"<br>
-              <strong>Definition:</strong> ${safeDefinition}
+              <strong>POS:</strong> ${pos}<br>
+              <strong>Context:</strong> "${context}"<br>
+              <strong>Definition:</strong> ${definition}
             </div>
             <div class="card-hint">Click to flip</div>
             <div class="card-actions">
-              <button onclick="deleteCard(event, ${idx})">Delete</button>
+              <button onclick="deleteCard(event, '${safeId}')">Delete</button>
             </div>
           </div>
         `;
       }).join('');
-
-      console.log('✓ Cards rendered successfully');
     } catch (err) {
-      console.error('Error rendering cards:', err);
-      container.innerHTML = '<p style="color:red;">Error rendering cards: ' + err.message + '</p>';
+      setStatus('');
+      emptyState.textContent = '❌ Network error: ' + err.message;
+      emptyState.style.display = 'block';
     }
   });
 }
 
 function toggleFlip(element) {
-  console.log('Toggling flip on card');
   element.classList.toggle('flipped');
 }
 
-function deleteCard(event, idx) {
-  console.log('Deleting card at index:', idx);
+async function deleteCard(event, cardId) {
   event.stopPropagation();
 
-  chrome.storage.local.get(['flashcards'], (result) => {
-    const flashcards = result.flashcards || [];
-    console.log('Before delete:', flashcards.length);
+  chrome.storage.local.get(['mochiApiKey'], async (cfg) => {
+    if (!cfg.mochiApiKey) return;
 
-    flashcards.splice(idx, 1);
-    console.log('After delete:', flashcards.length);
+    try {
+      const res = await fetch(`${MOCHI_API}/cards/${cardId}`, {
+        method: 'DELETE',
+        headers: mochiHeaders(cfg.mochiApiKey)
+      });
 
-    chrome.storage.local.set({ flashcards }, () => {
-      console.log('Delete complete, reloading...');
-      loadFlashcards();
-    });
-  });
-}
-
-function clearAllCards() {
-  if (confirm('Delete all flashcards? This cannot be undone.')) {
-    console.log('Clearing all cards');
-    chrome.storage.local.set({ flashcards: [] }, () => {
-      console.log('All cards cleared');
-      loadFlashcards();
-    });
-  }
-}
-
-function exportFlashcards() {
-  console.log('Exporting flashcards');
-
-  chrome.storage.local.get(['flashcards'], (result) => {
-    const flashcards = result.flashcards || [];
-
-    if (flashcards.length === 0) {
-      alert('No flashcards to export');
-      return;
+      if (res.ok) {
+        loadFlashcards();
+      } else {
+        alert(`Failed to delete card (${res.status})`);
+      }
+    } catch (err) {
+      alert('Network error: ' + err.message);
     }
-
-    // Create JSON data
-    const data = {
-      exportDate: new Date().toISOString(),
-      totalCards: flashcards.length,
-      cards: flashcards
-    };
-
-    // Create blob and download
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `vocab-flashcards-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    console.log('Exported', flashcards.length, 'cards');
-    alert('Exported ' + flashcards.length + ' flashcards!');
   });
 }
 
-// Log when script loads
-console.log('=== Dashboard.js loaded ===');
-console.log('Current time:', new Date().toISOString());
-console.log('Chrome available:', typeof chrome !== 'undefined');
+function openSettings() {
+  chrome.runtime.sendMessage({ type: 'openSettings' });
+}
 
-// Wait for DOM to be ready
+// Init
 if (document.readyState === 'loading') {
-  console.log('DOM still loading, waiting for DOMContentLoaded...');
-  document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOMContentLoaded fired');
-    loadFlashcards();
-  });
+  document.addEventListener('DOMContentLoaded', loadFlashcards);
 } else {
-  console.log('DOM already loaded, calling loadFlashcards immediately');
   loadFlashcards();
 }
-
-// Also try loading after a short delay to be safe
-setTimeout(() => {
-  console.log('Delayed load attempt...');
-  if (!document.getElementById('cardsContainer').innerHTML) {
-    loadFlashcards();
-  }
-}, 500);

@@ -105,14 +105,17 @@
       padding: 40px;
       color: #999;
     }
+    .empty a { color: #2196F3; }
+    .btn-settings { background: #2196F3; }
+    .btn-settings:hover { background: #1976D2; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>📚 Flashcard Review</h1>
     <div class="controls">
-      <button onclick="clearAllCards()">🗑️ Clear All</button>
-      <button onclick="exportFlashcards()">📥 Export</button>
+      <button onclick="loadFlashcards()">🔄 Refresh</button>
+      <button class="btn-settings" onclick="openSettings()">⚙️ Settings</button>
       <span id="count"></span>
     </div>
     <div class="cards-container" id="cardsContainer"></div>
